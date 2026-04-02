@@ -78,13 +78,14 @@ std::string SerialPort::read_line(int timeout_ms) {
     pfd.events = POLLIN;
 
     while (true) {
-        size_t newline_pos = read_buffer_.find('\n');
-        if (newline_pos != std::string::npos) {
-            std::string line = read_buffer_.substr(0, newline_pos);
-            read_buffer_.erase(0, newline_pos + 1);
-            if (!line.empty() && line.back() == '\r') {
-                line.pop_back();
+        size_t end_pos = read_buffer_.find_first_of("\r\n");
+        if (end_pos != std::string::npos) {
+            std::string line = read_buffer_.substr(0, end_pos);
+            size_t remove_len = 1;
+            if (read_buffer_[end_pos] == '\r' && end_pos + 1 < read_buffer_.size() && read_buffer_[end_pos + 1] == '\n') {
+                remove_len = 2;
             }
+            read_buffer_.erase(0, end_pos + remove_len);
             return line;
         }
 
@@ -109,8 +110,8 @@ bool SerialPort::write_line(const std::string& msg) {
     if (fd_ == -1) return false;
     
     std::string to_write = msg;
-    if (to_write.empty() || to_write.back() != '\n') {
-        to_write += '\n'; // According to doc it ends with \n or \r\n or \r
+    if (to_write.empty() || (to_write.back() != '\n' && to_write.back() != '\r')) {
+        to_write += "\r\n"; // Strictly match DVL hardware expectations safely
     }
 
     size_t written = 0;
