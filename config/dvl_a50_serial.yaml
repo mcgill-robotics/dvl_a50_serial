@@ -4,7 +4,7 @@ dvl_a50_serial:
     baud_rate: 115200
     frame: "dvl_a50_link"
     rate: 30.0
-    enable_on_activate: false
+    enable_on_activate: true
     speed_of_sound: 1500
     led_enabled: true
     mounting_rotation_offset: 0
