@@ -56,32 +56,35 @@ DvlParser::ParseResult DvlParser::parse(const std::string& line) {
 
     // Find the checksum separator
     size_t star_pos = line.find_last_of('*');
-    if (star_pos == std::string::npos || star_pos + 2 >= line.size()) {
-        return result;
-    }
+    std::string payload;
 
-    // verify checksum
-    std::string hex_str = line.substr(star_pos + 1, 2);
-    // Remove trailing \r or \n if parser missed it elsewhere
-    while (!hex_str.empty() && (hex_str.back() == '\r' || hex_str.back() == '\n')) {
-        hex_str.pop_back();
-    }
-    if (hex_str.size() != 2) return result;
-
-    uint8_t expected_crc = 0;
-    auto [ptr, ec] = std::from_chars(hex_str.data(), hex_str.data() + hex_str.size(), expected_crc, 16);
-    if (ec != std::errc()) {
-        return result;
-    }
-
-    uint8_t calculated_crc = crc8(reinterpret_cast<const uint8_t*>(line.data()), star_pos);
-    if (expected_crc != calculated_crc) {
-        result.error = "CRC Mismatch";
-        return result;
+    if (star_pos != std::string::npos && star_pos + 2 < line.size()) {
+        // verify checksum
+        std::string hex_str = line.substr(star_pos + 1, 2);
+        while (!hex_str.empty() && (hex_str.back() == '\r' || hex_str.back() == '\n')) {
+            hex_str.pop_back();
+        }
+        
+        if (hex_str.size() == 2) {
+            uint8_t expected_crc = 0;
+            auto [ptr, ec] = std::from_chars(hex_str.data(), hex_str.data() + hex_str.size(), expected_crc, 16);
+            if (ec == std::errc()) {
+                uint8_t calculated_crc = crc8(reinterpret_cast<const uint8_t*>(line.data()), star_pos);
+                if (expected_crc != calculated_crc) {
+                    result.error = "CRC Mismatch";
+                    return result;
+                }
+            }
+        }
+        payload = line.substr(0, star_pos);
+    } else {
+        payload = line;
+        while (!payload.empty() && (payload.back() == '\r' || payload.back() == '\n')) {
+            payload.pop_back();
+        }
     }
 
     result.is_valid = true;
-    std::string payload = line.substr(0, star_pos);
     size_t first_comma = payload.find(',');
     if (first_comma == std::string::npos) {
         result.command = payload;
