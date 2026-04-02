@@ -109,6 +109,14 @@ public:
         
         RCLCPP_INFO(get_logger(), "Connecting to DVL A50 at %s (%d baud)", port.c_str(), baud_rate);
 
+        std::string topic_velocity = this->get_parameter("topic_velocity").as_string();
+        std::string topic_dead_reckoning = this->get_parameter("topic_dead_reckoning").as_string();
+        std::string topic_odometry = this->get_parameter("topic_odometry").as_string();
+
+        velocity_pub_ = this->create_publisher<marine_acoustic_msgs::msg::Dvl>(topic_velocity, rclcpp::SensorDataQoS());
+        dead_reckoning_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(topic_dead_reckoning, rclcpp::SensorDataQoS());
+        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odometry, rclcpp::SensorDataQoS());
+
         bool success = dvl_.connect(port, baud_rate);
         if (!success)
         {
@@ -129,14 +137,6 @@ public:
         velocity_msg_.header.frame_id = frame;
         dead_reckoning_msg_.header.frame_id = frame;
         odometry_msg_.header.frame_id = frame;
-        
-        std::string topic_velocity = this->get_parameter("topic_velocity").as_string();
-        std::string topic_dead_reckoning = this->get_parameter("topic_dead_reckoning").as_string();
-        std::string topic_odometry = this->get_parameter("topic_odometry").as_string();
-
-        velocity_pub_ = this->create_publisher<marine_acoustic_msgs::msg::Dvl>(topic_velocity, rclcpp::SensorDataQoS());
-        dead_reckoning_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(topic_dead_reckoning, rclcpp::SensorDataQoS());
-        odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odometry, rclcpp::SensorDataQoS());
 
         return CallbackReturn::SUCCESS;
     }
@@ -272,7 +272,7 @@ public:
             }
         }
         
-        if (velocity_pub_->is_activated()) {
+        if (velocity_pub_ && velocity_pub_->is_activated()) {
             velocity_pub_->publish(velocity_msg_);
         }
     }
@@ -299,13 +299,13 @@ public:
         quat.setRPY(res.roll * M_PI / 180.0, res.pitch * M_PI / 180.0, res.yaw * M_PI / 180.0);
         dead_reckoning_msg_.pose.pose.orientation = tf2::toMsg(quat);
 
-        if (dead_reckoning_pub_->is_activated()) {
+        if (dead_reckoning_pub_ && dead_reckoning_pub_->is_activated()) {
             dead_reckoning_pub_->publish(dead_reckoning_msg_);
         }
 
         odometry_msg_.header.stamp = now_stamp;
         odometry_msg_.pose = dead_reckoning_msg_.pose;            
-        if (odometry_pub_->is_activated()) {
+        if (odometry_pub_ && odometry_pub_->is_activated()) {
             odometry_pub_->publish(odometry_msg_);
         }
     }
