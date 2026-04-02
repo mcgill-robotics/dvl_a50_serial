@@ -1,0 +1,21 @@
+dvl_a50_serial:
+  ros__parameters:
+    port: "/dev/ttyUSB0"
+    baud_rate: 115200
+    frame: "dvl_a50_link"
+    rate: 30.0
+    enable_on_activate: false
+    speed_of_sound: 1500
+    led_enabled: true
+    mounting_rotation_offset: 0
+    range_mode: "auto"
+
+    timeout_configure_ms: 3000
+    timeout_reset_dead_reckoning_ms: 3000
+    timeout_calibrate_gyro_ms: 15000
+    timeout_trigger_ping_ms: 3000
+    timeout_set_protocol_ms: 3000
+    
+    topic_velocity: "dvl/velocity"
+    topic_dead_reckoning: "dvl/dead_reckoning"
+    topic_odometry: "dvl/odometry"
