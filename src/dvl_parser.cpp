@@ -107,64 +107,84 @@ DvlParser::ParseResult DvlParser::parse(const std::string& line) {
     return result;
 }
 
-std::optional<VelocityReport> DvlParser::parse_wrz(const std::vector<std::string>& args) {
-    if (args.size() != 19) return std::nullopt;
+static double safe_double(const std::string& str) {
+    if (str.empty()) return 0.0;
+    try { return std::stod(str); } catch (...) { return 0.0; }
+}
 
-    VelocityReport rep;
-    try {
-        rep.velocity.x = std::stod(args[0]);
-        rep.velocity.y = std::stod(args[1]);
-        rep.velocity.z = std::stod(args[2]);
-        rep.valid = (args[3] == "y");
-        rep.altitude = std::stod(args[4]);
-        rep.fom = std::stod(args[5]);
-        for (int i = 0; i < 9; ++i) {
-            rep.covariance[i] = std::stod(args[6 + i]);
-        }
-        rep.time_of_validity = std::stoull(args[15]);
-        rep.time_of_transmission = std::stoull(args[16]);
-        rep.time = std::stod(args[17]);
-        rep.status = std::stoi(args[18]);
-        return rep;
-    } catch (...) {
+static uint64_t safe_u64(const std::string& str) {
+    if (str.empty()) return 0ULL;
+    try { return std::stoull(str); } catch (...) { return 0ULL; }
+}
+
+static int safe_int(const std::string& str) {
+    if (str.empty()) return 0;
+    try { return std::stoi(str, nullptr, 16); } catch(...) {
+        try { return std::stoi(str); } catch(...) { return 0; }
+    }
+}
+
+std::optional<VelocityReport> DvlParser::parse_wrz(const std::vector<std::string>& args) {
+    if (args.size() != 19 && args.size() != 11) {
         return std::nullopt;
     }
+
+    VelocityReport rep;
+    rep.velocity.x = safe_double(args[0]);
+    rep.velocity.y = safe_double(args[1]);
+    rep.velocity.z = safe_double(args[2]);
+    rep.valid = (args[3] == "y");
+    rep.altitude = safe_double(args[4]);
+    rep.fom = safe_double(args[5]);
+
+    int offset = 0;
+    if (args.size() == 19) {
+        for (int i = 0; i < 9; ++i) {
+            rep.covariance[i] = safe_double(args[6 + i]);
+        }
+        offset = 9;
+    } else if (args.size() == 11) {
+        // When invalid, the covariance is mathematically truncated structurally
+        rep.covariance[0] = safe_double(args[6]);
+        offset = 1;
+    }
+
+    rep.time_of_validity = safe_u64(args[6 + offset]);
+    rep.time_of_transmission = safe_u64(args[6 + offset + 1]);
+    rep.time = safe_double(args[6 + offset + 2]);
+    rep.status = safe_int(args[6 + offset + 3]);
+
+    return rep;
 }
 
 std::optional<DeadReckoningReport> DvlParser::parse_wrp(const std::vector<std::string>& args) {
     if (args.size() != 9) return std::nullopt;
 
     DeadReckoningReport rep;
-    try {
-        rep.time_stamp = std::stod(args[0]);
-        rep.position.x = std::stod(args[1]);
-        rep.position.y = std::stod(args[2]);
-        rep.position.z = std::stod(args[3]);
-        rep.pos_std = std::stod(args[4]);
-        rep.roll = std::stod(args[5]);
-        rep.pitch = std::stod(args[6]);
-        rep.yaw = std::stod(args[7]);
-        rep.status = std::stoi(args[8]);
-        return rep;
-    } catch (...) {
-        return std::nullopt;
-    }
+    rep.time_stamp = safe_double(args[0]);
+    rep.position.x = safe_double(args[1]);
+    rep.position.y = safe_double(args[2]);
+    rep.position.z = safe_double(args[3]);
+    rep.pos_std = safe_double(args[4]);
+    rep.roll = safe_double(args[5]);
+    rep.pitch = safe_double(args[6]);
+    rep.yaw = safe_double(args[7]);
+    rep.status = safe_int(args[8]);
+    
+    return rep;
 }
 
 std::optional<TransducerReport> DvlParser::parse_wru(const std::vector<std::string>& args) {
     if (args.size() != 5) return std::nullopt;
 
     TransducerReport rep;
-    try {
-        rep.id = std::stoi(args[0]);
-        rep.velocity = std::stod(args[1]);
-        rep.distance = std::stod(args[2]);
-        rep.rssi = std::stoi(args[3]);
-        rep.nsd = std::stoi(args[4]);
-        return rep;
-    } catch (...) {
-        return std::nullopt;
-    }
+    rep.id = safe_int(args[0]);
+    rep.velocity = safe_double(args[1]);
+    rep.distance = safe_double(args[2]);
+    rep.rssi = safe_int(args[3]);
+    rep.nsd = safe_int(args[4]);
+
+    return rep;
 }
 
 } // namespace dvl_a50_serial
