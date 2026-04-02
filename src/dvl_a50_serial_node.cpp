@@ -172,9 +172,6 @@ public:
         trigger_ping_srv_ = this->create_service<std_srvs::srv::Trigger>(
             "trigger_ping", std::bind(&DvlA50SerialNode::srv_trigger_ping, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
 
-        double rate = this->get_parameter("rate").as_double();
-        publish_timer_ = this->create_wall_timer(std::chrono::duration<double>(1.0 / rate), std::bind(&DvlA50SerialNode::publish_timer_callback, this));
-        
         dvl_active_ = true;
         RCLCPP_INFO(get_logger(), "DVL A50 Serial activated.");
 
@@ -186,10 +183,6 @@ public:
         LifecycleNode::on_deactivate(state);
         dvl_active_ = false;
         RCLCPP_INFO(get_logger(), "Deactivating DVL A50 Serial node");
-
-        if (publish_timer_) {
-            publish_timer_->cancel();
-        }
 
         int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
         bool led_enabled = this->get_parameter("led_enabled").as_bool();
@@ -218,7 +211,6 @@ public:
         calibrate_gyro_srv_.reset();
         reset_dead_reckoning_srv_.reset();
         trigger_ping_srv_.reset();
-        publish_timer_.reset();
 
         return CallbackReturn::SUCCESS;
     }
@@ -242,6 +234,7 @@ public:
             }
         }
 
+        velocity_msg_.header.stamp = this->now();
         velocity_msg_.velocity.x = res.velocity.x;
         velocity_msg_.velocity.y = res.velocity.y;
         velocity_msg_.velocity.z = res.velocity.z;
@@ -267,6 +260,7 @@ public:
             } else {
                 velocity_msg_.range[beam] = -1.0;
             }
+            last_transducer_reports_[beam].distance = -1.0;
         }
 
         odometry_msg_.twist.twist.linear.x = res.velocity.x;
@@ -277,7 +271,10 @@ public:
                 odometry_msg_.twist.covariance[i*6 + j] = res.covariance[i*3 + j];
             }
         }
-        new_velocity_ = true;
+        
+        if (velocity_pub_->is_activated()) {
+            velocity_pub_->publish(velocity_msg_);
+        }
     }
 
     void on_dead_reckoning_report(const DeadReckoningReport& res) {
@@ -287,57 +284,36 @@ public:
             RCLCPP_WARN_STREAM_THROTTLE(get_logger(), *this, 1000, "Received dead reckoning report with error status " << res.status);
         }
 
+        auto now_stamp = this->now();
+        dead_reckoning_msg_.header.stamp = now_stamp;
         dead_reckoning_msg_.pose.pose.position.x = res.position.x;
         dead_reckoning_msg_.pose.pose.position.y = res.position.y;
         dead_reckoning_msg_.pose.pose.position.z = res.position.z;
-        dead_reckoning_msg_.pose.covariance[0] = res.pos_std;
-        dead_reckoning_msg_.pose.covariance[7] = res.pos_std;
-        dead_reckoning_msg_.pose.covariance[14] = res.pos_std;
+
+        double variance = res.pos_std * res.pos_std;
+        dead_reckoning_msg_.pose.covariance[0] = variance;
+        dead_reckoning_msg_.pose.covariance[7] = variance;
+        dead_reckoning_msg_.pose.covariance[14] = variance;
 
         tf2::Quaternion quat;
         quat.setRPY(res.roll * M_PI / 180.0, res.pitch * M_PI / 180.0, res.yaw * M_PI / 180.0);
         dead_reckoning_msg_.pose.pose.orientation = tf2::toMsg(quat);
 
+        if (dead_reckoning_pub_->is_activated()) {
+            dead_reckoning_pub_->publish(dead_reckoning_msg_);
+        }
+
+        odometry_msg_.header.stamp = now_stamp;
         odometry_msg_.pose = dead_reckoning_msg_.pose;            
-        new_dead_reckoning_ = true;
+        if (odometry_pub_->is_activated()) {
+            odometry_pub_->publish(odometry_msg_);
+        }
     }
 
     void on_transducer_report(const TransducerReport& res) {
         std::lock_guard<std::mutex> lock(data_mutex_);
         if (res.id >= 0 && res.id < 4) {
             last_transducer_reports_[res.id] = res;
-        }
-    }
-
-    void publish_timer_callback() {
-        std::lock_guard<std::mutex> lock(data_mutex_);
-        
-        auto now_stamp = this->now();
-
-        if (new_velocity_) {
-            velocity_msg_.header.stamp = now_stamp;
-            if (velocity_pub_->is_activated()) {
-                velocity_pub_->publish(velocity_msg_);
-            }
-            new_velocity_ = false;
-
-            odometry_msg_.header.stamp = now_stamp;
-            if (odometry_pub_->is_activated()) {
-                odometry_pub_->publish(odometry_msg_);
-            }
-        }
-
-        if (new_dead_reckoning_) {
-            dead_reckoning_msg_.header.stamp = now_stamp;
-            if (dead_reckoning_pub_->is_activated()) {
-                dead_reckoning_pub_->publish(dead_reckoning_msg_);
-            }
-            new_dead_reckoning_ = false;
-
-            odometry_msg_.header.stamp = now_stamp;
-            if (odometry_pub_->is_activated()) {
-                odometry_pub_->publish(odometry_msg_);
-            }
         }
     }
 
@@ -394,8 +370,6 @@ private:
     bool dvl_active_ = false;
 
     std::mutex data_mutex_;
-    bool new_velocity_ = false;
-    bool new_dead_reckoning_ = false;
     
     marine_acoustic_msgs::msg::Dvl velocity_msg_;
     geometry_msgs::msg::PoseWithCovarianceStamped dead_reckoning_msg_;
@@ -413,7 +387,6 @@ private:
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_ping_srv_;
 
     rclcpp::CallbackGroup::SharedPtr service_callback_group_;
-    rclcpp::TimerBase::SharedPtr publish_timer_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_sub_;
 };
 
