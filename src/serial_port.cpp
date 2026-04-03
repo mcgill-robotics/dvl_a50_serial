@@ -15,17 +15,13 @@ SerialPort::~SerialPort() {
 }
 
 bool SerialPort::open(const std::string& port, int baud_rate) {
-    fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY);
+    fd_ = ::open(port.c_str(), O_RDWR | O_NOCTTY | O_NONBLOCK);
     if (fd_ == -1) {
         return false;
     }
 
-    if (tcflush(fd_, TCIOFLUSH)) {
-        // Warning, not fatal
-    }
-
-    struct termios options;
-    if (tcgetattr(fd_, &options)) {
+    struct termios options{};
+    if (tcgetattr(fd_, &options) != 0) {
         close();
         return false;
     }
@@ -36,28 +32,33 @@ bool SerialPort::open(const std::string& port, int baud_rate) {
     options.c_cflag &= ~CSTOPB;
     options.c_cflag &= ~CSIZE;
     options.c_cflag |= CS8;
-    options.c_cflag |= (CLOCAL | CREAD);
+    options.c_cflag |= CLOCAL | CREAD;
+    options.c_cflag &= ~CRTSCTS;
 
-    options.c_cc[VTIME] = 1;
     options.c_cc[VMIN] = 0;
+    options.c_cc[VTIME] = 1;
 
+    speed_t speed = B115200;
     switch (baud_rate) {
-        case 4800:   cfsetospeed(&options, B4800);   break;
-        case 9600:   cfsetospeed(&options, B9600);   break;
-        case 19200:  cfsetospeed(&options, B19200);  break;
-        case 38400:  cfsetospeed(&options, B38400);  break;
-        case 115200: cfsetospeed(&options, B115200); break;
-        default:
-            cfsetospeed(&options, B115200);
-            break;
+        case 4800: speed = B4800; break;
+        case 9600: speed = B9600; break;
+        case 19200: speed = B19200; break;
+        case 38400: speed = B38400; break;
+        case 115200: speed = B115200; break;
+        default: speed = B115200; break;
     }
 
-    cfsetispeed(&options, cfgetospeed(&options));
+    cfsetispeed(&options, speed);
+    cfsetospeed(&options, speed);
 
-    tcflush(fd_, TCIFLUSH);
-    if (tcsetattr(fd_, TCSANOW, &options)) {
+    if (tcsetattr(fd_, TCSANOW, &options) != 0) {
         close();
         return false;
+    }
+
+    int flags = fcntl(fd_, F_GETFL, 0);
+    if (flags != -1) {
+        fcntl(fd_, F_SETFL, flags & ~O_NONBLOCK);
     }
 
     return true;
