@@ -44,13 +44,20 @@ void DvlA50Serial::set_error_callback(std::function<void(const std::string&)> cb
 }
 
 bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
+    // Generate CRC-8 checksum explicitly
+    std::string full_cmd = cmd;
+    uint8_t crc = DvlParser::crc8(reinterpret_cast<const uint8_t*>(full_cmd.data()), full_cmd.size());
+    char hex[4];
+    snprintf(hex, sizeof(hex), "*%02x", crc);
+    full_cmd += hex;
+
     std::lock_guard<std::mutex> lock(ack_mutex_);
     
     ack_received_ = false;
     nak_received_ = false;
     wait_for_ack_ = true;
 
-    if (!port_.write_line(cmd)) {
+    if (!port_.write_line(full_cmd)) {
         wait_for_ack_ = false;
         return false;
     }
@@ -103,6 +110,8 @@ void DvlA50Serial::read_loop() {
         std::string line = port_.read_line(100); // 100 ms timeout
         if (line.empty()) continue;
 
+        std::cout << "[RAW_DVL_ARRAY] '" << line << "'" << std::endl;
+
         auto result = DvlParser::parse(line);
         if (!result.is_valid) {
             if (!result.error.empty() && error_cb_) {
@@ -127,10 +136,12 @@ void DvlA50Serial::read_loop() {
                 transducer_cb_(*rep);
             }
         } else if (result.command == "wra") {
+            std::cout << "[DVL_ACK] Valid standard ACK parsed natively" << std::endl;
             if (wait_for_ack_) {
                 ack_received_ = true;
             }
         } else if (result.command == "wrn" || result.command == "wr?" || result.command == "wr!") {
+            std::cout << "[DVL_NAK] Hardware rejected command: " << result.command << std::endl;
             if (wait_for_ack_) {
                 nak_received_ = true;
             }

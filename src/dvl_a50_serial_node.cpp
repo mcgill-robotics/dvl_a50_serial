@@ -131,7 +131,10 @@ public:
         std::string range_mode = this->get_parameter("range_mode").as_string();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
-        dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+        if (!dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+            RCLCPP_ERROR(get_logger(), "Initial DVL configure failed. Check serial connection or timeouts.");
+            return CallbackReturn::FAILURE;
+        }
         
         velocity_msg_.sound_speed = speed_of_sound;
         velocity_msg_.header.frame_id = frame;
@@ -146,7 +149,10 @@ public:
         LifecycleNode::on_activate(state);
 
         int timeout_set_protocol_ms = this->get_parameter("timeout_set_protocol_ms").as_int();
-        dvl_.set_protocol(3, timeout_set_protocol_ms);
+        if (!dvl_.set_protocol(3, timeout_set_protocol_ms)) {
+            RCLCPP_ERROR(get_logger(), "Failed to set DVL serial protocol to 3. DVL might be ignoring ACKs.");
+            return CallbackReturn::FAILURE;
+        }
 
         if (enable_on_activate_) {
             int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
@@ -154,7 +160,10 @@ public:
             int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
             std::string range_mode = this->get_parameter("range_mode").as_string();
             int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
-            dvl_.configure(speed_of_sound, true, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+            if (!dvl_.configure(speed_of_sound, true, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+                RCLCPP_ERROR(get_logger(), "Failed to enable acoustics during activation. DVL rejecting hooks.");
+                return CallbackReturn::FAILURE;
+            }
         }
         
         velocity_pub_->on_activate();
