@@ -133,11 +133,20 @@ public:
         std::string range_mode = this->get_parameter("range_mode").as_string();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
-        if (!dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+        int attempts = 3;
+        bool success = false;
+        for (int i = 0; i < attempts; i++) {
+            if (dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+                success = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
+        if (!success) {
             RCLCPP_ERROR(get_logger(), "Initial DVL configure failed. Check serial connection or timeouts.");
             return CallbackReturn::FAILURE;
         }
-        
+
         velocity_msg_.sound_speed = speed_of_sound;
         velocity_msg_.header.frame_id = frame;
         dead_reckoning_msg_.header.frame_id = frame;
