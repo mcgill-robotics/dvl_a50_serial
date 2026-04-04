@@ -20,6 +20,13 @@ bool SerialPort::open(const std::string& port, int baud_rate) {
         return false;
     }
 
+
+    if (tcflush(fd_, TCIOFLUSH)) {
+        // Warning, not fatal
+    }
+
+
+
     struct termios options{};
     if (tcgetattr(fd_, &options) != 0) {
         close();
@@ -50,6 +57,8 @@ bool SerialPort::open(const std::string& port, int baud_rate) {
 
     cfsetispeed(&options, speed);
     cfsetospeed(&options, speed);
+
+    tcflush(fd_, TCIFLUSH);
 
     if (tcsetattr(fd_, TCSANOW, &options) != 0) {
         close();

@@ -124,6 +124,8 @@ public:
             return CallbackReturn::FAILURE;
         }
 
+        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+
         enable_on_activate_ = this->get_parameter("enable_on_activate").as_bool();
         int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
         bool led_enabled = this->get_parameter("led_enabled").as_bool();
