@@ -117,7 +117,16 @@ public:
         dead_reckoning_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(topic_dead_reckoning, rclcpp::SensorDataQoS());
         odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odometry, rclcpp::SensorDataQoS());
 
-        bool success = dvl_.connect(port, baud_rate);
+        int attempts = 3;
+        bool success = false;
+        for (int i = 0; i < attempts; i++) {
+            RCLCPP_INFO(get_logger(), "Attempting to connect to DVL A50 (%d/%d)", i + 1, attempts);
+            if (dvl_.connect(port, baud_rate)) {
+                success = true;
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+        }
         if (!success)
         {
             RCLCPP_ERROR(get_logger(), "Serial connection failed.");
@@ -133,9 +142,10 @@ public:
         std::string range_mode = this->get_parameter("range_mode").as_string();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
-        int attempts = 3;
-        bool success = false;
+        attempts = 3;
+        success = false;
         for (int i = 0; i < attempts; i++) {
+            RCLCPP_INFO(get_logger(), "Attempting to configure DVL A50 (%d/%d)", i + 1, attempts);
             if (dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
                 success = true;
                 break;
