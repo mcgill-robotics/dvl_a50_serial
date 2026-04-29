@@ -97,7 +97,7 @@ public:
         std::string topic_odometry = this->get_parameter("topic_odometry").as_string();
 
         velocity_pub_ = this->create_publisher<dvl_msgs::msg::DVL>(topic_velocity, rclcpp::SensorDataQoS());
-        dead_reckoning_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(topic_dead_reckoning, rclcpp::SensorDataQoS());
+        dead_reckoning_pub_ = this->create_publisher<dvl_msgs::msg::DVLDR>(topic_dead_reckoning, rclcpp::SensorDataQoS());
         odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odometry, rclcpp::SensorDataQoS());
 
         int attempts = 3;
@@ -312,25 +312,34 @@ public:
 
         auto now_stamp = this->now();
         dead_reckoning_msg_.header.stamp = now_stamp;
-        dead_reckoning_msg_.pose.pose.position.x = res.position.x;
-        dead_reckoning_msg_.pose.pose.position.y = res.position.y;
-        dead_reckoning_msg_.pose.pose.position.z = res.position.z;
+        dead_reckoning_msg_.position.x = res.position.x;
+        dead_reckoning_msg_.position.y = res.position.y;
+        dead_reckoning_msg_.position.z = res.position.z;
 
-        double variance = res.pos_std * res.pos_std;
-        dead_reckoning_msg_.pose.covariance[0] = variance;
-        dead_reckoning_msg_.pose.covariance[7] = variance;
-        dead_reckoning_msg_.pose.covariance[14] = variance;
+        dead_reckoning_msg_.pos_std = res.pos_std;
 
-        tf2::Quaternion quat;
-        quat.setRPY(res.roll * M_PI / 180.0, res.pitch * M_PI / 180.0, res.yaw * M_PI / 180.0);
-        dead_reckoning_msg_.pose.pose.orientation = tf2::toMsg(quat);
+        dead_reckoning_msg_.roll = res.roll;
+        dead_reckoning_msg_.pitch = res.pitch;
+        dead_reckoning_msg_.yaw = res.yaw;
+
+        dead_reckoning_msg_.status = res.status;
 
         if (dead_reckoning_pub_ && dead_reckoning_pub_->is_activated()) {
             dead_reckoning_pub_->publish(dead_reckoning_msg_);
         }
 
-        odometry_msg_.header.stamp = now_stamp;
-        odometry_msg_.pose = dead_reckoning_msg_.pose;            
+
+
+        // Update the pose of the odometry
+        odometry_msg_.header.stamp = dead_reckoning_msg_.header.stamp;
+        // position
+        odometry_msg_.pose.pose.position.x = dead_reckoning_msg_.position.x;
+        odometry_msg_.pose.pose.position.y = dead_reckoning_msg_.position.y;
+        odometry_msg_.pose.pose.position.z = dead_reckoning_msg_.position.z;
+        // orientation, convert to quaternion
+        tf2::Quaternion quat;
+        quat.setRPY(res.roll * M_PI / 180.0, res.pitch * M_PI / 180.0, res.yaw * M_PI / 180.0);
+        odometry_msg_.pose.pose.orientation = tf2::toMsg(quat);
         if (odometry_pub_ && odometry_pub_->is_activated()) {
             odometry_pub_->publish(odometry_msg_);
         }
@@ -398,12 +407,12 @@ private:
     std::mutex data_mutex_;
     
     dvl_msgs::msg::DVL velocity_msg_;
-    geometry_msgs::msg::PoseWithCovarianceStamped dead_reckoning_msg_;
+    dvl_msgs::msg::DVLDR dead_reckoning_msg_;
     nav_msgs::msg::Odometry odometry_msg_;
     TransducerReport last_transducer_reports_[4];
     
     rclcpp_lifecycle::LifecyclePublisher<dvl_msgs::msg::DVL>::SharedPtr velocity_pub_;
-    rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr dead_reckoning_pub_;
+    rclcpp_lifecycle::LifecyclePublisher<dvl_msgs::msg::DVLDR>::SharedPtr dead_reckoning_pub_;
     rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
 
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr enable_srv_;
