@@ -14,7 +14,9 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <marine_acoustic_msgs/msg/dvl.hpp>
+#include <dvl_msgs/msg/dvl.hpp>
+#include <dvl_msgs/msg/dvl_beam.hpp>
+#include <dvl_msgs/msg/dvldr.hpp>
 
 #include "dvl_a50_serial/dvl_a50_serial.hpp"
 
@@ -46,25 +48,6 @@ public:
         this->declare_parameter<std::string>("topic_velocity", "dvl/velocity");
         this->declare_parameter<std::string>("topic_dead_reckoning", "dvl/dead_reckoning");
         this->declare_parameter<std::string>("topic_odometry", "dvl/odometry");
-
-        velocity_msg_.velocity_mode = marine_acoustic_msgs::msg::Dvl::DVL_MODE_BOTTOM;
-        velocity_msg_.dvl_type = marine_acoustic_msgs::msg::Dvl::DVL_TYPE_PISTON;
-
-        velocity_msg_.beam_unit_vec[0].x = -0.6532814824381883;
-        velocity_msg_.beam_unit_vec[0].y =  0.6532814824381883;
-        velocity_msg_.beam_unit_vec[0].z =  0.38268343236508984;
-        
-        velocity_msg_.beam_unit_vec[1].x = -0.6532814824381883;
-        velocity_msg_.beam_unit_vec[1].y = -0.6532814824381883;
-        velocity_msg_.beam_unit_vec[1].z =  0.38268343236508984;
-
-        velocity_msg_.beam_unit_vec[2].x =  0.6532814824381883;
-        velocity_msg_.beam_unit_vec[2].y = -0.6532814824381883;
-        velocity_msg_.beam_unit_vec[2].z =  0.38268343236508984;
-
-        velocity_msg_.beam_unit_vec[3].x =  0.6532814824381883;
-        velocity_msg_.beam_unit_vec[3].y =  0.6532814824381883;
-        velocity_msg_.beam_unit_vec[3].z =  0.38268343236508984;
 
         dvl_.set_velocity_callback(std::bind(&DvlA50SerialNode::on_velocity_report, this, std::placeholders::_1));
         dvl_.set_dead_reckoning_callback(std::bind(&DvlA50SerialNode::on_dead_reckoning_report, this, std::placeholders::_1));
@@ -113,7 +96,7 @@ public:
         std::string topic_dead_reckoning = this->get_parameter("topic_dead_reckoning").as_string();
         std::string topic_odometry = this->get_parameter("topic_odometry").as_string();
 
-        velocity_pub_ = this->create_publisher<marine_acoustic_msgs::msg::Dvl>(topic_velocity, rclcpp::SensorDataQoS());
+        velocity_pub_ = this->create_publisher<dvl_msgs::msg::DVL>(topic_velocity, rclcpp::SensorDataQoS());
         dead_reckoning_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>(topic_dead_reckoning, rclcpp::SensorDataQoS());
         odometry_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odometry, rclcpp::SensorDataQoS());
 
@@ -157,7 +140,6 @@ public:
             return CallbackReturn::FAILURE;
         }
 
-        velocity_msg_.sound_speed = speed_of_sound;
         velocity_msg_.header.frame_id = frame;
         dead_reckoning_msg_.header.frame_id = frame;
         odometry_msg_.header.frame_id = frame;
@@ -263,39 +245,53 @@ public:
                 RCLCPP_WARN_STREAM_THROTTLE(get_logger(), *this, 500, "DVL may be overheating");
             }
         }
+        if (res.altitude < 0.0)
+        {
+            RCLCPP_WARN_STREAM_THROTTLE(get_logger(), *this, 1000, "Received velocity report with negative altitude data: " << res.altitude << ".");
+        }
 
         velocity_msg_.header.stamp = this->now();
+
         velocity_msg_.velocity.x = res.velocity.x;
         velocity_msg_.velocity.y = res.velocity.y;
         velocity_msg_.velocity.z = res.velocity.z;
+
+        velocity_msg_.fom = res.fom;
+
         for (size_t i = 0; i < 9; i++) {
-            velocity_msg_.velocity_covar[i] = res.covariance[i];
+            velocity_msg_.covariance[i] = res.covariance[i];
         }
         if(res.altitude >= 0.0 && res.valid) {
             velocity_msg_.altitude = res.altitude;
         }
 
-        velocity_msg_.course_gnd = std::atan2(res.velocity.y, res.velocity.x);
-        velocity_msg_.speed_gnd = std::sqrt(res.velocity.x * res.velocity.x + res.velocity.y * res.velocity.y);
-        velocity_msg_.beam_ranges_valid = true;
-        velocity_msg_.beam_velocities_valid = res.valid;
-        velocity_msg_.num_good_beams = 0;
-
-        for (int beam = 0; beam < 4; beam++) {
-            if (last_transducer_reports_[beam].distance > 0.0) {
-                velocity_msg_.num_good_beams++;
-                velocity_msg_.range[beam] = last_transducer_reports_[beam].distance;
-                velocity_msg_.beam_quality[beam] = last_transducer_reports_[beam].rssi;
-                velocity_msg_.beam_velocity[beam] = last_transducer_reports_[beam].velocity;
-            } else {
-                velocity_msg_.range[beam] = -1.0;
-            }
-            last_transducer_reports_[beam].distance = -1.0;
+        // remove existing beam list
+        velocity_msg_.beams.clear();
+        for (const TransducerReport& transducer : res.transducers)
+        {
+            dvl_msgs::msg::DVLBeam beam;
+            beam.id = transducer.id;
+            beam.velocity = transducer.velocity;
+            beam.distance = transducer.distance;
+            beam.rssi = transducer.rssi;
+            beam.nsd = transducer.nsd;
+            // per-beam validity not procvide by serial protocol, so just default to true
+            beam.valid = true;
+            velocity_msg_.beams.push_back(beam);
         }
 
+        velocity_msg_.velocity_valid = res.valid;
+        velocity_msg_.status = res.status;
+
+        velocity_msg_.time_of_validity = res.time_of_validity;
+        velocity_msg_.time_of_transmission = res.time_of_transmission;
+
+        // Update the twist of the odometry
+        odometry_msg_.header.stamp = velocity_msg_.header.stamp;
         odometry_msg_.twist.twist.linear.x = res.velocity.x;
         odometry_msg_.twist.twist.linear.y = res.velocity.y;
         odometry_msg_.twist.twist.linear.z = res.velocity.z;
+        // Fill in the top left 3x3 of the 6x6 twist covariance matrix.
         for (size_t i = 0; i < 3; i++) {
             for (size_t j = 0; j < 3; j++) {
                 odometry_msg_.twist.covariance[i*6 + j] = res.covariance[i*3 + j];
@@ -401,12 +397,12 @@ private:
 
     std::mutex data_mutex_;
     
-    marine_acoustic_msgs::msg::Dvl velocity_msg_;
+    dvl_msgs::msg::DVL velocity_msg_;
     geometry_msgs::msg::PoseWithCovarianceStamped dead_reckoning_msg_;
     nav_msgs::msg::Odometry odometry_msg_;
     TransducerReport last_transducer_reports_[4];
     
-    rclcpp_lifecycle::LifecyclePublisher<marine_acoustic_msgs::msg::Dvl>::SharedPtr velocity_pub_;
+    rclcpp_lifecycle::LifecyclePublisher<dvl_msgs::msg::DVL>::SharedPtr velocity_pub_;
     rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr dead_reckoning_pub_;
     rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Odometry>::SharedPtr odometry_pub_;
 
