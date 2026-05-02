@@ -258,6 +258,7 @@ public:
 
         velocity_msg_.fom = res.fom;
 
+        velocity_msg_.covariance.resize(9);
         for (size_t i = 0; i < 9; i++) {
             velocity_msg_.covariance[i] = res.covariance[i];
         }
