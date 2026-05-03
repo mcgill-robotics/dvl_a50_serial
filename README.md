@@ -2,6 +2,9 @@
 
 A modern, high-performance ROS 2 Lifecycle Node driver for the Water Linked DVL-A50 over serial. This module reads directly from the RS232/USB serial port rather than an Ethernet socket, eliminating network overhead and enabling tightly synchronized timestamps (`this->now()`) to prevent TF extrapolation failures typical of raw TCP/IP DVL configurations.
 
+## Dependencies
+- [dvl_msgs](https://github.com/avyan-k/dvl_msgs) - Custom message definitions for DVL data structures
+
 ## Setup & Udev Rules
 To allow ROS to access the serial port (e.g. `/dev/ttyUSB0`) without requiring `sudo` privileges, you must add your user to the `dialout` group:
 
