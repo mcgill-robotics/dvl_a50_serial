@@ -17,6 +17,7 @@
 #include <dvl_msgs/msg/dvl.hpp>
 #include <dvl_msgs/msg/dvl_beam.hpp>
 #include <dvl_msgs/msg/dvldr.hpp>
+#include <dvl_msgs/srv/get_config.hpp>
 
 #include "dvl_a50_serial/dvl_a50_serial.hpp"
 
@@ -183,6 +184,8 @@ public:
             "reset_dead_reckoning", std::bind(&DvlA50SerialNode::srv_reset_dead_reckoning, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
         trigger_ping_srv_ = this->create_service<std_srvs::srv::Trigger>(
             "trigger_ping", std::bind(&DvlA50SerialNode::srv_trigger_ping, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
+        get_config_srv_ = this->create_service<dvl_msgs::srv::GetConfig>(
+            "get_config", std::bind(&DvlA50SerialNode::srv_get_config, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
 
         dvl_active_ = true;
         RCLCPP_INFO(get_logger(), "DVL A50 Serial activated.");
@@ -399,6 +402,23 @@ public:
         res->message = success ? "Ping triggered" : "Failed to trigger ping";
     }
 
+    void srv_get_config(dvl_msgs::srv::GetConfig::Request::SharedPtr /*req*/, dvl_msgs::srv::GetConfig::Response::SharedPtr res) {
+        int timeout = this->get_parameter("timeout_get_config_ms").as_int();
+        bool success = dvl_.query_current_config(timeout);
+        res->success = success;
+        if (success) {
+            DVLConfiguration config = dvl_.get_current_config();
+            res->speed_of_sound = config.speed_of_sound;
+            res->acoustic_enabled = config.acoustic_enabled;
+            res->dark_mode_enabled = config.dark_mode_enabled;
+            res->mounting_rotation_offset = config.mounting_rotation_offset;
+            res->range_mode = config.range_mode;
+            
+        } else {
+            res->error_message = "Failed to get config";
+        }
+    }
+
 private:
     DvlA50Serial dvl_;
 
@@ -421,6 +441,7 @@ private:
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibrate_gyro_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_dead_reckoning_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_ping_srv_;
+    rclcpp::Service<dvl_msgs::srv::GetConfig>::SharedPtr get_config_srv_;
 
     rclcpp::CallbackGroup::SharedPtr service_callback_group_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_sub_;

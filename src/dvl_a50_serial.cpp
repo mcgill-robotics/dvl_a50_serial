@@ -159,6 +159,7 @@ void DvlA50Serial::read_loop() {
                 current_config_ = *rep;
                 std::cout << "[DVL_CONFIG] Obtained latest configuration from device" << std::endl;
             }
+        }
     }
 }
 
