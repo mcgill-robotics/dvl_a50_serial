@@ -190,4 +190,16 @@ std::optional<TransducerReport> DvlParser::parse_wru(const std::vector<std::stri
     return rep;
 }
 
+std::optional<DVLConfiguration> DvlParser::parse_wrc(const std::vector<std::string>& args) {
+    if (args.size() != 5) return std::nullopt;
+
+    DVLConfiguration config;
+    config.speed_of_sound = safe_int(args[0]);
+    config.acoustic_enabled = (args[1] == "y");
+    config.led_enabled = (args[2] == "n"); // led_enabled=false means dark_mode_enabled=y
+    config.mounting_rotation_offset = safe_int(args[3]);
+    config.range_mode = args[4];
+
+    return config;
+
 } // namespace dvl_a50_serial
