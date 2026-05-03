@@ -30,11 +30,13 @@ public:
     bool calibrate_gyro(int timeout_ms);
     bool trigger_ping(int timeout_ms);
     bool set_protocol(int protocol_number, int timeout_ms);
-
+    bool query_current_config(int timeout_ms);
+    DVLConfiguration get_current_config();
 private:
     void read_loop();
 
     SerialPort port_;
+    DVLConfiguration current_config_;
     std::atomic<bool> running_;
     std::thread read_thread_;
 

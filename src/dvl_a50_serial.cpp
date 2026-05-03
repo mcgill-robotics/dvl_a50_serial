@@ -105,6 +105,14 @@ bool DvlA50Serial::set_protocol(int protocol_number, int timeout_ms) {
     return send_command("wcp," + std::to_string(protocol_number), timeout_ms);
 }
 
+bool DvlA50Serial::query_current_config(int timeout_ms) {
+    return send_command("wcc", timeout_ms);
+}
+
+DVLConfiguration DvlA50Serial::get_current_config() {
+    return current_config_;
+}
+
 void DvlA50Serial::read_loop() {
     while (running_) {
         std::string line = port_.read_line(100); // 100 ms timeout
@@ -145,7 +153,12 @@ void DvlA50Serial::read_loop() {
             if (wait_for_ack_) {
                 nak_received_ = true;
             }
-        }
+        } else if (result.command == "wrc") {
+            auto rep = DvlParser::parse_wrc(result.args);
+            if (rep) {
+                current_config_ = *rep;
+                std::cout << "[DVL_CONFIG] Obtained latest configuration from device" << std::endl;
+            }
     }
 }
 
