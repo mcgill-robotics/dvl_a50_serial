@@ -14,12 +14,21 @@ struct Vector3 {
     double z = 0.0;
 };
 
+struct TransducerReport {
+    int id = -1;
+    double velocity = 0.0;
+    double distance = -1.0;
+    int rssi = -999;
+    int nsd = -999;
+};
+
 struct VelocityReport {
     Vector3 velocity;
     bool valid = false;
     double altitude = -1.0;
     double fom = 0.0;
     std::array<double, 9> covariance{0.0};
+    std::array<TransducerReport, 4> transducers;
     uint64_t time_of_validity = 0;
     uint64_t time_of_transmission = 0;
     double time = 0.0;
@@ -34,14 +43,6 @@ struct DeadReckoningReport {
     double pitch = 0.0;
     double yaw = 0.0;
     int status = 0;
-};
-
-struct TransducerReport {
-    int id = -1;
-    double velocity = 0.0;
-    double distance = -1.0;
-    int rssi = -999;
-    int nsd = -999;
 };
 
 class DvlParser {
