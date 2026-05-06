@@ -46,6 +46,7 @@ public:
         this->declare_parameter<int>("timeout_calibrate_gyro_ms", 15000);
         this->declare_parameter<int>("timeout_trigger_ping_ms", 3000);
         this->declare_parameter<int>("timeout_set_protocol_ms", 3000);
+        this->declare_parameter<int>("timeout_get_config_ms", 5000);
         this->declare_parameter<std::string>("topic_velocity", "dvl/velocity");
         this->declare_parameter<std::string>("topic_dead_reckoning", "dvl/dead_reckoning");
         this->declare_parameter<std::string>("topic_odometry", "dvl/odometry");

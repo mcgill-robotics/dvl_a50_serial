@@ -15,6 +15,7 @@ dvl_a50_serial:
     timeout_calibrate_gyro_ms: 20000
     timeout_trigger_ping_ms: 5000
     timeout_set_protocol_ms: 5000
+    timeout_get_config_ms: 5000
     
     topic_velocity: "dvl/velocity"
     topic_dead_reckoning: "dvl/dead_reckoning"
