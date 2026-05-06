@@ -4,7 +4,7 @@
 
 namespace dvl_a50_serial {
 
-DvlA50Serial::DvlA50Serial() : running_(false), wait_for_ack_(false), ack_received_(false), nak_received_(false) {}
+DvlA50Serial::DvlA50Serial() : running_(false), wait_for_ack_(false), ack_received_(false), nak_received_(false), config_updated_(false) {}
 
 DvlA50Serial::~DvlA50Serial() {
     disconnect();
@@ -106,6 +106,8 @@ bool DvlA50Serial::set_protocol(int protocol_number, int timeout_ms) {
 }
 
 bool DvlA50Serial::query_current_config(int timeout_ms) {
+    // stale config flag since it might be updated
+    config_updated_ = false;
     return send_command("wcc", timeout_ms);
 }
 
@@ -148,18 +150,20 @@ void DvlA50Serial::read_loop() {
             if (wait_for_ack_) {
                 ack_received_ = true;
             }
-        } else if (result.command == "wrn" || result.command == "wr?" || result.command == "wr!") {
-            std::cout << "[DVL_NAK] Hardware rejected command: " << result.command << std::endl;
-            if (wait_for_ack_) {
-                nak_received_ = true;
-            }
         } else if (result.command == "wrc") {
             auto rep = DvlParser::parse_wrc(result.args);
             if (rep) {
                 current_config_ = *rep;
                 std::cout << "[DVL_CONFIG] Obtained latest configuration from device" << std::endl;
+                config_updated_ = true;
             }
-        }
+        } 
+        else if (result.command == "wrn" || result.command == "wr?" || result.command == "wr!") {
+            std::cout << "[DVL_NAK] Hardware rejected command: " << result.command << std::endl;
+            if (wait_for_ack_) {
+                nak_received_ = true;
+            }
+        } 
     }
 }
 

@@ -49,6 +49,7 @@ private:
     std::atomic<bool> wait_for_ack_;
     std::atomic<bool> ack_received_;
     std::atomic<bool> nak_received_;
+    std::atomic<bool> config_updated_;
 };
 
 } // namespace dvl_a50_serial
