@@ -195,10 +195,11 @@ std::optional<DVLConfiguration> DvlParser::parse_wrc(const std::vector<std::stri
 
     DVLConfiguration config;
     config.speed_of_sound = safe_int(args[0]);
+    config.mounting_rotation_offset = safe_int(args[1]);
     config.acoustic_enabled = (args[1] == "y");
     config.dark_mode_enabled = (args[2] == "y");
-    config.mounting_rotation_offset = safe_int(args[3]);
     config.range_mode = args[4];
+    config.periodic_cycling_enabled = (args[5] == "y");
 
     return config;
 }

@@ -28,7 +28,7 @@ public:
     bool wait_for_ack(int timeout_ms);
     bool wait_for_config(int timeout_ms);
 
-    bool configure(int speed_of_sound, bool acoustic_enabled, bool led_enabled, int mounting_rotation_offset, const std::string& range_mode, int timeout_ms);
+    bool configure(const DVLConfiguration& config, int timeout_ms = 5000);
     bool reset_dead_reckoning(int timeout_ms);
     bool calibrate_gyro(int timeout_ms);
     bool trigger_ping(int timeout_ms);

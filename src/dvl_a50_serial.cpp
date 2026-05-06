@@ -104,13 +104,15 @@ bool DvlA50Serial::wait_for_config(int timeout_ms) {
     return false; // timeout
 }
 
-bool DvlA50Serial::configure(int speed_of_sound, bool acoustic_enabled, bool led_enabled, int mounting_rotation_offset, const std::string& range_mode, int timeout_ms) {
+bool DvlA50Serial::configure(const DVLConfiguration& config, int timeout_ms) {
     // wcs,[speed_of_sound],[mounting_rotation_offset],[acoustic_enabled],[dark_mode_enabled],[range_mode],[periodic_cycling_enabled]
-    std::string cmd = "wcs," + std::to_string(speed_of_sound) + "," + 
-                      std::to_string(mounting_rotation_offset) + "," + 
-                      (acoustic_enabled ? "y" : "n") + "," + 
-                      (!led_enabled ? "y" : "n") + "," + // led_enabled=false means dark_mode_enabled=y
-                      range_mode + ",y"; // Assuming periodic_cycling_enabled is y by default based on spec
+    std::string cmd = "wcs," + 
+                    std::to_string(config.speed_of_sound) + "," + 
+                    std::to_string(config.mounting_rotation_offset) + "," + 
+                    (config.acoustic_enabled ? "y" : "n") + "," + 
+                    (config.dark_mode_enabled ? "y" : "n") + "," +
+                    config.range_mode + ",y" +
+                    (config.periodic_cycling_enabled ? "y" : "n");
     return send_command(cmd, timeout_ms);
 }
 

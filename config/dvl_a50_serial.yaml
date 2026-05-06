@@ -9,6 +9,7 @@ dvl_a50_serial:
     led_enabled: true
     mounting_rotation_offset: 0
     range_mode: "auto"
+    periodic_cycling_enabled: true
 
     timeout_configure_ms: 5000
     timeout_reset_dead_reckoning_ms: 5000

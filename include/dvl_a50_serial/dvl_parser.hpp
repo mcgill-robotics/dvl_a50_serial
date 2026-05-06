@@ -47,10 +47,11 @@ struct DeadReckoningReport {
 
 struct DVLConfiguration {
     int speed_of_sound;
+    int mounting_rotation_offset;
     bool acoustic_enabled;
     bool dark_mode_enabled;
-    int mounting_rotation_offset;
     std::string range_mode;
+    bool periodic_cycling_enabled;
 };
 
 class DvlParser {
