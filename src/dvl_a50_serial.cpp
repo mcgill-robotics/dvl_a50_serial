@@ -61,7 +61,6 @@ bool DvlA50Serial::write_command_to_port(const std::string& cmd) {
     
     ack_received_ = false;
     nak_received_ = false;
-    wait_for_ack_ = true;
 
     if (!port_.write_line(full_cmd)) {
         wait_for_ack_ = false;
@@ -97,6 +96,9 @@ bool DvlA50Serial::wait_for_config(int timeout_ms) {
         if (config_updated_) {
             return true;
         }
+        if (nak_received_) {
+            return false;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
     return false; // timeout
@@ -131,7 +133,7 @@ bool DvlA50Serial::set_protocol(int protocol_number, int timeout_ms) {
 bool DvlA50Serial::query_current_config(int timeout_ms) {
     // stale config flag since it might be updated
     config_updated_ = false;
-    if (!write_command_to_port("wrc")) {
+    if (!write_command_to_port("wcc")) {
         return false;
     }
     return wait_for_config(timeout_ms);

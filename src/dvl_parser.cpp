@@ -191,7 +191,7 @@ std::optional<TransducerReport> DvlParser::parse_wru(const std::vector<std::stri
 }
 
 std::optional<DVLConfiguration> DvlParser::parse_wrc(const std::vector<std::string>& args) {
-    if (args.size() != 5) return std::nullopt;
+    if (args.size() != 6) return std::nullopt;
 
     DVLConfiguration config;
     config.speed_of_sound = safe_int(args[0]);
