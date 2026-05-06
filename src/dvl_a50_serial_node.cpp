@@ -262,18 +262,17 @@ public:
 
         velocity_msg_.fom = res.fom;
 
-        velocity_msg_.covariance.resize(9);
-        for (size_t i = 0; i < 9; i++) {
-            velocity_msg_.covariance[i] = res.covariance[i];
-        }
+        // assign covariance
+        velocity_msg_.covariance = res.covariance;
+
         if(res.altitude >= 0.0 && res.valid) {
             velocity_msg_.altitude = res.altitude;
         }
 
-        // remove existing beam list
-        velocity_msg_.beams.clear();
-        for (const TransducerReport& transducer : res.transducers)
+        // assign beams
+        for (int i = 0; i < 4; i++) 
         {
+            TransducerReport transducer = res.transducers[i];
             dvl_msgs::msg::DVLBeam beam;
             beam.id = transducer.id;
             beam.velocity = transducer.velocity;
@@ -282,7 +281,7 @@ public:
             beam.nsd = transducer.nsd;
             // per-beam validity not procvide by serial protocol, so just default to true
             beam.valid = true;
-            velocity_msg_.beams.push_back(beam);
+            velocity_msg_.beams[i] = beam;
         }
 
         velocity_msg_.velocity_valid = res.valid;
