@@ -44,13 +44,19 @@ void DvlA50Serial::set_error_callback(std::function<void(const std::string&)> cb
 }
 
 bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
+    if (!write_command_to_port(cmd)) {
+        return false;
+    }
+    return wait_for_ack(timeout_ms);
+}
+
+bool DvlA50Serial::write_command_to_port(const std::string& cmd) {
     // Generate CRC-8 checksum explicitly
     std::string full_cmd = cmd;
     uint8_t crc = DvlParser::crc8(reinterpret_cast<const uint8_t*>(full_cmd.data()), full_cmd.size());
     char hex[4];
     snprintf(hex, sizeof(hex), "*%02x", crc);
     full_cmd += hex;
-
     std::lock_guard<std::mutex> lock(ack_mutex_);
     
     ack_received_ = false;
@@ -61,7 +67,13 @@ bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
         wait_for_ack_ = false;
         return false;
     }
+    return true;
+}
 
+bool DvlA50Serial::wait_for_ack(int timeout_ms) {
+    ack_received_ = false;
+    nak_received_ = false;
+    wait_for_ack_ = true;
     auto start = std::chrono::steady_clock::now();
     while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < timeout_ms) {
         if (ack_received_) {
@@ -76,6 +88,17 @@ bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
     }
 
     wait_for_ack_ = false;
+    return false; // timeout
+}
+
+bool DvlA50Serial::wait_for_config(int timeout_ms) {
+    auto start = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < timeout_ms) {
+        if (config_updated_) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
     return false; // timeout
 }
 
@@ -108,7 +131,10 @@ bool DvlA50Serial::set_protocol(int protocol_number, int timeout_ms) {
 bool DvlA50Serial::query_current_config(int timeout_ms) {
     // stale config flag since it might be updated
     config_updated_ = false;
-    return send_command("wcc", timeout_ms);
+    if (!write_command_to_port("wrc")) {
+        return false;
+    }
+    return wait_for_config(timeout_ms);
 }
 
 DVLConfiguration DvlA50Serial::get_current_config() {
@@ -119,8 +145,6 @@ void DvlA50Serial::read_loop() {
     while (running_) {
         std::string line = port_.read_line(100); // 100 ms timeout
         if (line.empty()) continue;
-
-        std::cout << "[RAW_DVL_ARRAY] '" << line << "'" << std::endl;
 
         auto result = DvlParser::parse(line);
         if (!result.is_valid) {

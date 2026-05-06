@@ -24,6 +24,9 @@ public:
     void set_error_callback(std::function<void(const std::string&)> cb);
 
     bool send_command(const std::string& cmd, int timeout_ms = 15000); // 15s timeout because gyro calib can take up to 15s
+    bool write_command_to_port(const std::string& cmd);
+    bool wait_for_ack(int timeout_ms);
+    bool wait_for_config(int timeout_ms);
 
     bool configure(int speed_of_sound, bool acoustic_enabled, bool led_enabled, int mounting_rotation_offset, const std::string& range_mode, int timeout_ms);
     bool reset_dead_reckoning(int timeout_ms);
