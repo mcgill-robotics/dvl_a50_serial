@@ -150,7 +150,9 @@ public:
         }
 
         velocity_msg_.header.frame_id = frame;
+        velocity_msg_.form = "serial";
         dead_reckoning_msg_.header.frame_id = frame;
+        dead_reckoning_msg_.format = "serial";
         odometry_msg_.header.frame_id = frame;
 
         return CallbackReturn::SUCCESS;
