@@ -12,7 +12,7 @@ find_package(rclcpp_lifecycle REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
-find_package(marine_acoustic_msgs REQUIRED)
+find_package(dvl_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 
 add_executable(dvl_a50_serial_node 
@@ -34,7 +34,7 @@ ament_target_dependencies(dvl_a50_serial_node
   std_srvs
   geometry_msgs
   nav_msgs
-  marine_acoustic_msgs
+  dvl_msgs
   tf2_geometry_msgs
 )
 
