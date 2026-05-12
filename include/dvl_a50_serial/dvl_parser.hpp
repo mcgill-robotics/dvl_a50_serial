@@ -45,6 +45,15 @@ struct DeadReckoningReport {
     int status = 0;
 };
 
+struct DVLConfiguration {
+    int speed_of_sound;
+    int mounting_rotation_offset;
+    bool acoustic_enabled;
+    bool dark_mode_enabled;
+    std::string range_mode;
+    bool periodic_cycling_enabled;
+};
+
 class DvlParser {
 public:
     DvlParser() = default;
@@ -62,6 +71,7 @@ public:
     static std::optional<VelocityReport> parse_wrz(const std::vector<std::string>& args);
     static std::optional<DeadReckoningReport> parse_wrp(const std::vector<std::string>& args);
     static std::optional<TransducerReport> parse_wru(const std::vector<std::string>& args);
+    static std::optional<DVLConfiguration> parse_wrc(const std::vector<std::string>& args);
 };
 
 } // namespace dvl_a50_serial

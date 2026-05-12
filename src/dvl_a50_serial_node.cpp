@@ -17,6 +17,7 @@
 #include <dvl_msgs/msg/dvl.hpp>
 #include <dvl_msgs/msg/dvl_beam.hpp>
 #include <dvl_msgs/msg/dvldr.hpp>
+#include <dvl_msgs/srv/get_config.hpp>
 
 #include "dvl_a50_serial/dvl_a50_serial.hpp"
 
@@ -39,15 +40,17 @@ public:
         this->declare_parameter<int>("speed_of_sound", 1500);
         this->declare_parameter<bool>("led_enabled", true);
         this->declare_parameter<int>("mounting_rotation_offset", 0);
+        this->declare_parameter<bool>("periodic_cycling_enabled",true);
         this->declare_parameter<std::string>("range_mode", "auto");
         this->declare_parameter<int>("timeout_configure_ms", 3000);
         this->declare_parameter<int>("timeout_reset_dead_reckoning_ms", 3000);
         this->declare_parameter<int>("timeout_calibrate_gyro_ms", 15000);
         this->declare_parameter<int>("timeout_trigger_ping_ms", 3000);
         this->declare_parameter<int>("timeout_set_protocol_ms", 3000);
-        this->declare_parameter<std::string>("topic_velocity", "dvl/velocity");
-        this->declare_parameter<std::string>("topic_dead_reckoning", "dvl/dead_reckoning");
-        this->declare_parameter<std::string>("topic_odometry", "dvl/odometry");
+        this->declare_parameter<int>("timeout_get_config_ms", 5000);
+        this->declare_parameter<std::string>("topic_velocity", "velocity");
+        this->declare_parameter<std::string>("topic_dead_reckoning", "dead_reckoning");
+        this->declare_parameter<std::string>("topic_odometry", "odometry");
 
         dvl_.set_velocity_callback(std::bind(&DvlA50SerialNode::on_velocity_report, this, std::placeholders::_1));
         dvl_.set_dead_reckoning_callback(std::bind(&DvlA50SerialNode::on_dead_reckoning_report, this, std::placeholders::_1));
@@ -69,12 +72,15 @@ public:
                 }
             }
             if (reconfigure && dvl_active_) {
-                int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-                bool led_enabled = this->get_parameter("led_enabled").as_bool();
-                int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-                std::string range_mode = this->get_parameter("range_mode").as_string();
+                DVLConfiguration config;
+                config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+                config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+                config.acoustic_enabled = true;
+                config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
+                config.range_mode = this->get_parameter("range_mode").as_string();
+                config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
                 int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
-                dvl_.configure(speed_of_sound, true, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+                dvl_.configure(config, timeout_configure_ms);
             }
             return result;
         });
@@ -119,17 +125,20 @@ public:
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 
         enable_on_activate_ = this->get_parameter("enable_on_activate").as_bool();
-        int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-        bool led_enabled = this->get_parameter("led_enabled").as_bool();
-        int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-        std::string range_mode = this->get_parameter("range_mode").as_string();
+        DVLConfiguration config;
+        config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+        config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+        config.acoustic_enabled = true;
+        config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
+        config.range_mode = this->get_parameter("range_mode").as_string();        
+        config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
         attempts = 3;
         success = false;
         for (int i = 0; i < attempts; i++) {
             RCLCPP_INFO(get_logger(), "Attempting to configure DVL A50 (%d/%d)", i + 1, attempts);
-            if (dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+            if (dvl_.configure(config, timeout_configure_ms)) {
                 success = true;
                 break;
             }
@@ -141,7 +150,9 @@ public:
         }
 
         velocity_msg_.header.frame_id = frame;
+        velocity_msg_.form = "serial";
         dead_reckoning_msg_.header.frame_id = frame;
+        dead_reckoning_msg_.format = "serial";
         odometry_msg_.header.frame_id = frame;
 
         return CallbackReturn::SUCCESS;
@@ -158,12 +169,15 @@ public:
         }
 
         if (enable_on_activate_) {
-            int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-            bool led_enabled = this->get_parameter("led_enabled").as_bool();
-            int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-            std::string range_mode = this->get_parameter("range_mode").as_string();
+            DVLConfiguration config;
+            config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+            config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+            config.acoustic_enabled = true;
+            config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
+            config.range_mode = this->get_parameter("range_mode").as_string();
+            config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
             int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
-            if (!dvl_.configure(speed_of_sound, true, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms)) {
+            if (!dvl_.configure(config, timeout_configure_ms)) {
                 RCLCPP_ERROR(get_logger(), "Failed to enable acoustics during activation. DVL rejecting hooks.");
                 return CallbackReturn::FAILURE;
             }
@@ -183,6 +197,8 @@ public:
             "reset_dead_reckoning", std::bind(&DvlA50SerialNode::srv_reset_dead_reckoning, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
         trigger_ping_srv_ = this->create_service<std_srvs::srv::Trigger>(
             "trigger_ping", std::bind(&DvlA50SerialNode::srv_trigger_ping, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
+        get_config_srv_ = this->create_service<dvl_msgs::srv::GetConfig>(
+            "get_config", std::bind(&DvlA50SerialNode::srv_get_config, this, std::placeholders::_1, std::placeholders::_2), rmw_qos_profile_services_default, service_callback_group_);
 
         dvl_active_ = true;
         RCLCPP_INFO(get_logger(), "DVL A50 Serial activated.");
@@ -196,12 +212,15 @@ public:
         dvl_active_ = false;
         RCLCPP_INFO(get_logger(), "Deactivating DVL A50 Serial node");
 
-        int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-        bool led_enabled = this->get_parameter("led_enabled").as_bool();
-        int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-        std::string range_mode = this->get_parameter("range_mode").as_string();
+        DVLConfiguration config;
+        config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+        config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+        config.acoustic_enabled = false;
+        config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
+        config.range_mode = this->get_parameter("range_mode").as_string();
+        config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
-        dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+        dvl_.configure(config, timeout_configure_ms);
 
         velocity_pub_->on_deactivate();
         dead_reckoning_pub_->on_deactivate();
@@ -258,18 +277,17 @@ public:
 
         velocity_msg_.fom = res.fom;
 
-        velocity_msg_.covariance.resize(9);
-        for (size_t i = 0; i < 9; i++) {
-            velocity_msg_.covariance[i] = res.covariance[i];
-        }
+        // assign covariance
+        velocity_msg_.covariance = res.covariance;
+
         if(res.altitude >= 0.0 && res.valid) {
             velocity_msg_.altitude = res.altitude;
         }
 
-        // remove existing beam list
-        velocity_msg_.beams.clear();
-        for (const TransducerReport& transducer : res.transducers)
+        // assign beams
+        for (int i = 0; i < 4; i++) 
         {
+            TransducerReport transducer = res.transducers[i];
             dvl_msgs::msg::DVLBeam beam;
             beam.id = transducer.id;
             beam.velocity = transducer.velocity;
@@ -278,7 +296,7 @@ public:
             beam.nsd = transducer.nsd;
             // per-beam validity not procvide by serial protocol, so just default to true
             beam.valid = true;
-            velocity_msg_.beams.push_back(beam);
+            velocity_msg_.beams[i] = beam;
         }
 
         velocity_msg_.velocity_valid = res.valid;
@@ -354,25 +372,31 @@ public:
     }
 
     void srv_enable(std_srvs::srv::Trigger::Request::SharedPtr /*req*/, std_srvs::srv::Trigger::Response::SharedPtr res) {
-        int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-        bool led_enabled = this->get_parameter("led_enabled").as_bool();
-        int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-        std::string range_mode = this->get_parameter("range_mode").as_string();
+        DVLConfiguration config;
+        config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+        config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+        config.acoustic_enabled = true;
+        config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
+        config.range_mode = this->get_parameter("range_mode").as_string();
+        config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
-        bool success = dvl_.configure(speed_of_sound, true, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+        bool success = dvl_.configure(config, timeout_configure_ms);
         res->success = success;
         res->message = success ? "Acoustics enabled" : "Failed to enable acoustics";
     }
 
     void srv_disable(std_srvs::srv::Trigger::Request::SharedPtr /*req*/, std_srvs::srv::Trigger::Response::SharedPtr res) {
-        int speed_of_sound = this->get_parameter("speed_of_sound").as_int();
-        bool led_enabled = this->get_parameter("led_enabled").as_bool();
-        int mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
-        std::string range_mode = this->get_parameter("range_mode").as_string();
+        DVLConfiguration config;
+        config.speed_of_sound = this->get_parameter("speed_of_sound").as_int();
+        config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
+        config.acoustic_enabled = false;
+        config.dark_mode_enabled = this->get_parameter("led_enabled").as_bool();
+        config.range_mode = this->get_parameter("range_mode").as_string();
+        config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
-        bool success = dvl_.configure(speed_of_sound, false, led_enabled, mounting_rotation_offset, range_mode, timeout_configure_ms);
+        bool success = dvl_.configure(config, timeout_configure_ms);
         res->success = success;
         res->message = success ? "Acoustics disabled" : "Failed to disable acoustics";
     }
@@ -399,6 +423,24 @@ public:
         res->message = success ? "Ping triggered" : "Failed to trigger ping";
     }
 
+    void srv_get_config(dvl_msgs::srv::GetConfig::Request::SharedPtr /*req*/, dvl_msgs::srv::GetConfig::Response::SharedPtr res) {
+        int timeout = this->get_parameter("timeout_get_config_ms").as_int();
+        bool success = dvl_.query_current_config(timeout);
+        res->success = success;
+        if (success) {
+            DVLConfiguration config = dvl_.get_current_config();
+            res->speed_of_sound = config.speed_of_sound;
+            res->mounting_rotation_offset = config.mounting_rotation_offset;
+            res->acoustic_enabled = config.acoustic_enabled;
+            res->dark_mode_enabled = config.dark_mode_enabled;
+            res->range_mode = config.range_mode;
+            res->periodic_cycling_enabled = config.periodic_cycling_enabled;
+            
+        } else {
+            res->error_message = "Failed to get config";
+        }
+    }
+
 private:
     DvlA50Serial dvl_;
 
@@ -421,6 +463,7 @@ private:
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr calibrate_gyro_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_dead_reckoning_srv_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr trigger_ping_srv_;
+    rclcpp::Service<dvl_msgs::srv::GetConfig>::SharedPtr get_config_srv_;
 
     rclcpp::CallbackGroup::SharedPtr service_callback_group_;
     rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr param_sub_;

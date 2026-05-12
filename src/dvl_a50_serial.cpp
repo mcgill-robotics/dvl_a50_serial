@@ -4,7 +4,7 @@
 
 namespace dvl_a50_serial {
 
-DvlA50Serial::DvlA50Serial() : running_(false), wait_for_ack_(false), ack_received_(false), nak_received_(false) {}
+DvlA50Serial::DvlA50Serial() : running_(false), wait_for_ack_(false), ack_received_(false), nak_received_(false), config_updated_(false) {}
 
 DvlA50Serial::~DvlA50Serial() {
     disconnect();
@@ -44,24 +44,35 @@ void DvlA50Serial::set_error_callback(std::function<void(const std::string&)> cb
 }
 
 bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
+    if (!write_command_to_port(cmd)) {
+        return false;
+    }
+    return wait_for_ack(timeout_ms);
+}
+
+bool DvlA50Serial::write_command_to_port(const std::string& cmd) {
     // Generate CRC-8 checksum explicitly
     std::string full_cmd = cmd;
     uint8_t crc = DvlParser::crc8(reinterpret_cast<const uint8_t*>(full_cmd.data()), full_cmd.size());
     char hex[4];
     snprintf(hex, sizeof(hex), "*%02x", crc);
     full_cmd += hex;
-
     std::lock_guard<std::mutex> lock(ack_mutex_);
     
     ack_received_ = false;
     nak_received_ = false;
-    wait_for_ack_ = true;
 
     if (!port_.write_line(full_cmd)) {
         wait_for_ack_ = false;
         return false;
     }
+    return true;
+}
 
+bool DvlA50Serial::wait_for_ack(int timeout_ms) {
+    ack_received_ = false;
+    nak_received_ = false;
+    wait_for_ack_ = true;
     auto start = std::chrono::steady_clock::now();
     while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < timeout_ms) {
         if (ack_received_) {
@@ -79,13 +90,29 @@ bool DvlA50Serial::send_command(const std::string& cmd, int timeout_ms) {
     return false; // timeout
 }
 
-bool DvlA50Serial::configure(int speed_of_sound, bool acoustic_enabled, bool led_enabled, int mounting_rotation_offset, const std::string& range_mode, int timeout_ms) {
+bool DvlA50Serial::wait_for_config(int timeout_ms) {
+    auto start = std::chrono::steady_clock::now();
+    while (std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count() < timeout_ms) {
+        if (config_updated_) {
+            return true;
+        }
+        if (nak_received_) {
+            return false;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    }
+    return false; // timeout
+}
+
+bool DvlA50Serial::configure(const DVLConfiguration& config, int timeout_ms) {
     // wcs,[speed_of_sound],[mounting_rotation_offset],[acoustic_enabled],[dark_mode_enabled],[range_mode],[periodic_cycling_enabled]
-    std::string cmd = "wcs," + std::to_string(speed_of_sound) + "," + 
-                      std::to_string(mounting_rotation_offset) + "," + 
-                      (acoustic_enabled ? "y" : "n") + "," + 
-                      (!led_enabled ? "y" : "n") + "," + // led_enabled=false means dark_mode_enabled=y
-                      range_mode + ",y"; // Assuming periodic_cycling_enabled is y by default based on spec
+    std::string cmd = "wcs," + 
+                    std::to_string(config.speed_of_sound) + "," + 
+                    std::to_string(config.mounting_rotation_offset) + "," + 
+                    (config.acoustic_enabled ? "y" : "n") + "," + 
+                    (config.dark_mode_enabled ? "y" : "n") + "," +
+                    config.range_mode + "," +
+                    (config.periodic_cycling_enabled ? "y" : "n");
     return send_command(cmd, timeout_ms);
 }
 
@@ -105,12 +132,23 @@ bool DvlA50Serial::set_protocol(int protocol_number, int timeout_ms) {
     return send_command("wcp," + std::to_string(protocol_number), timeout_ms);
 }
 
+bool DvlA50Serial::query_current_config(int timeout_ms) {
+    // stale config flag since it might be updated
+    config_updated_ = false;
+    if (!write_command_to_port("wcc")) {
+        return false;
+    }
+    return wait_for_config(timeout_ms);
+}
+
+DVLConfiguration DvlA50Serial::get_current_config() {
+    return current_config_;
+}
+
 void DvlA50Serial::read_loop() {
     while (running_) {
         std::string line = port_.read_line(100); // 100 ms timeout
         if (line.empty()) continue;
-
-        std::cout << "[RAW_DVL_ARRAY] '" << line << "'" << std::endl;
 
         auto result = DvlParser::parse(line);
         if (!result.is_valid) {
@@ -140,12 +178,20 @@ void DvlA50Serial::read_loop() {
             if (wait_for_ack_) {
                 ack_received_ = true;
             }
-        } else if (result.command == "wrn" || result.command == "wr?" || result.command == "wr!") {
+        } else if (result.command == "wrc") {
+            auto rep = DvlParser::parse_wrc(result.args);
+            if (rep) {
+                current_config_ = *rep;
+                std::cout << "[DVL_CONFIG] Obtained latest configuration from device" << std::endl;
+                config_updated_ = true;
+            }
+        } 
+        else if (result.command == "wrn" || result.command == "wr?" || result.command == "wr!") {
             std::cout << "[DVL_NAK] Hardware rejected command: " << result.command << std::endl;
             if (wait_for_ack_) {
                 nak_received_ = true;
             }
-        }
+        } 
     }
 }
 

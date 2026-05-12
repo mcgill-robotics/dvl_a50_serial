@@ -2,6 +2,9 @@
 
 A modern, high-performance ROS 2 Lifecycle Node driver for the Water Linked DVL-A50 over serial. This module reads directly from the RS232/USB serial port rather than an Ethernet socket, eliminating network overhead and enabling tightly synchronized timestamps (`this->now()`) to prevent TF extrapolation failures typical of raw TCP/IP DVL configurations.
 
+## Dependencies
+- [dvl_msgs](https://github.com/mcgill-robotics/dvl_msgs) - Custom message definitions for DVL data structures
+
 ## Setup & Udev Rules
 To allow ROS to access the serial port (e.g. `/dev/ttyUSB0`) without requiring `sudo` privileges, you must add your user to the `dialout` group:
 
@@ -35,7 +38,7 @@ Parameters can be configured in `/config/dvl_a50_serial.yaml` or over the `ros2 
 | `timeout_configure_ms` | int | `3000` | Serial command wait limit for configure frames. |
 | `timeout_calibrate_gyro_ms` | int | `15000` | Gyro calibration can take up to 15 seconds. |
 
-*(Also seamlessly supports standard ping timeouts `timeout_reset_dead_reckoning_ms`, `timeout_trigger_ping_ms`, `timeout_set_protocol_ms`)*
+*(Also seamlessly supports standard ping timeouts `timeout_reset_dead_reckoning_ms`, `timeout_trigger_ping_ms`, `timeout_set_protocol_ms`), (`timeout_get_config_ms`)*
 
 ## Topics
 
@@ -71,19 +74,22 @@ ros2 topic hz /dvl/velocity
 ### Calling Services
 ```bash
 # Enable acoustics (turns on the DVL pings)
-ros2 service call /enable std_srvs/srv/Trigger
+ros2 service call dvl/enable std_srvs/srv/Trigger
 
 # Disable acoustics (securely mutes the DVL pings)
-ros2 service call /disable std_srvs/srv/Trigger
+ros2 service call dvl/disable std_srvs/srv/Trigger
 
 # Trigger the hardware gyro calibration routine (takes up to ~15 seconds)
-ros2 service call /calibrate_gyro std_srvs/srv/Trigger
+ros2 service call dvl/calibrate_gyro std_srvs/srv/Trigger
 
 # Reset the internal dead reckoning positional tracks back to (0, 0, 0)
-ros2 service call /reset_dead_reckoning std_srvs/srv/Trigger
+ros2 service call dvl/reset_dead_reckoning std_srvs/srv/Trigger
 
 # Fire a single ping manually (requires acoustics to be disabled first)
-ros2 service call /trigger_ping std_srvs/srv/Trigger
+ros2 service call dvl/trigger_ping std_srvs/srv/Trigger
+
+# Get config parameters directly from the DVL (e.g. to verify speed of sound or range mode)
+ros2 service call dvl/get_config dvl_msgs/srv/GetConfig
 ```
 
 ### Changing Parameters Dynamically
@@ -91,16 +97,16 @@ Because of the `param_sub_` implementation, you can safely hot-swap core limits 
 
 ```bash
 # Change the speed of sound safely at runtime
-ros2 param set /dvl_a50_serial speed_of_sound 1520
+ros2 param set dvl/dvl_a50_serial speed_of_sound 1520
 
 # Disable the internal LED
-ros2 param set /dvl_a50_serial led_enabled false
+ros2 param set dvl/dvl_a50_serial led_enabled false
 
 # Switch range mode tracking to exclusively track 7.7m to 36m (mode 3)
-ros2 param set /dvl_a50_serial range_mode "=3"
+ros2 param set dvl/dvl_a50_serial range_mode "=3"
 
 # Switch range mode tracking to search dynamically between 0.3m (1) and 36m (3)
-ros2 param set /dvl_a50_serial range_mode "1<=3"
+ros2 param set dvl/dvl_a50_serial range_mode "1<=3"
 ```
 
 ### Manual Lifecycle Management
@@ -108,18 +114,18 @@ If you disable the auto-startup parameter in the launch file (`autostart:=false`
 
 ```bash
 # Check the current lifecycle state of the node (e.g. 'unconfigured', 'inactive', 'active')
-ros2 lifecycle get /dvl_a50_serial
+ros2 lifecycle get dvl/dvl_a50_serial
 
 # Configure the node (Attempts to connect to the serial port and configure the DVL)
-ros2 lifecycle set /dvl_a50_serial configure
+ros2 lifecycle set dvl/dvl_a50_serial configure
 
 # Activate the node (Starts publishing ROS messages and enables acoustics if enable_on_activate is true)
-ros2 lifecycle set /dvl_a50_serial activate
+ros2 lifecycle set dvl/dvl_a50_serial activate
 
 # Deactivate the node (Stops publishing and disables acoustics)
-ros2 lifecycle set /dvl_a50_serial deactivate
+ros2 lifecycle set dvl/dvl_a50_serial deactivate
 
 # Clean up (Closes the serial port and unloads memory boundaries)
-ros2 lifecycle set /dvl_a50_serial cleanup
+ros2 lifecycle set dvl/dvl_a50_serial cleanup
 ```
 
