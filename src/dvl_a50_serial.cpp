@@ -111,7 +111,7 @@ bool DvlA50Serial::configure(const DVLConfiguration& config, int timeout_ms) {
                     std::to_string(config.mounting_rotation_offset) + "," + 
                     (config.acoustic_enabled ? "y" : "n") + "," + 
                     (config.dark_mode_enabled ? "y" : "n") + "," +
-                    config.range_mode + ",y" +
+                    config.range_mode + "," +
                     (config.periodic_cycling_enabled ? "y" : "n");
     return send_command(cmd, timeout_ms);
 }

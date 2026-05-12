@@ -40,6 +40,7 @@ public:
         this->declare_parameter<int>("speed_of_sound", 1500);
         this->declare_parameter<bool>("led_enabled", true);
         this->declare_parameter<int>("mounting_rotation_offset", 0);
+        this->declare_parameter<bool>("periodic_cycling_enabled",true);
         this->declare_parameter<std::string>("range_mode", "auto");
         this->declare_parameter<int>("timeout_configure_ms", 3000);
         this->declare_parameter<int>("timeout_reset_dead_reckoning_ms", 3000);
@@ -129,7 +130,7 @@ public:
         config.mounting_rotation_offset = this->get_parameter("mounting_rotation_offset").as_int();
         config.acoustic_enabled = true;
         config.dark_mode_enabled = !this->get_parameter("led_enabled").as_bool();
-        config.range_mode = this->get_parameter("range_mode").as_string();
+        config.range_mode = this->get_parameter("range_mode").as_string();        
         config.periodic_cycling_enabled = this->get_parameter("periodic_cycling_enabled").as_bool();
         int timeout_configure_ms = this->get_parameter("timeout_configure_ms").as_int();
         
