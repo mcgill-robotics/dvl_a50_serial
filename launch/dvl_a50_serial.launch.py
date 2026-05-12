@@ -29,7 +29,7 @@ def generate_launch_description():
         package='dvl_a50_serial',
         executable='dvl_a50_serial_node',
         name='dvl_a50_serial',
-        namespace='',
+        namespace='dvl',
         output='screen',
         parameters=[config_file]
     )

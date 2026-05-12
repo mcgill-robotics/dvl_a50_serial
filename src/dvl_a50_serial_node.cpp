@@ -48,9 +48,9 @@ public:
         this->declare_parameter<int>("timeout_trigger_ping_ms", 3000);
         this->declare_parameter<int>("timeout_set_protocol_ms", 3000);
         this->declare_parameter<int>("timeout_get_config_ms", 5000);
-        this->declare_parameter<std::string>("topic_velocity", "dvl/velocity");
-        this->declare_parameter<std::string>("topic_dead_reckoning", "dvl/dead_reckoning");
-        this->declare_parameter<std::string>("topic_odometry", "dvl/odometry");
+        this->declare_parameter<std::string>("topic_velocity", "velocity");
+        this->declare_parameter<std::string>("topic_dead_reckoning", "dead_reckoning");
+        this->declare_parameter<std::string>("topic_odometry", "odometry");
 
         dvl_.set_velocity_callback(std::bind(&DvlA50SerialNode::on_velocity_report, this, std::placeholders::_1));
         dvl_.set_dead_reckoning_callback(std::bind(&DvlA50SerialNode::on_dead_reckoning_report, this, std::placeholders::_1));
